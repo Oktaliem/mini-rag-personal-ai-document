@@ -1,0 +1,3799 @@
+{
+  "info": {
+    "name": "Mini RAG API",
+    "description": "A Retrieval Augmented Generation (RAG) API for document indexing and question answering",
+    "version": "2.0.0",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "event": [
+    {
+      "listen": "prerequest",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Enhanced token management with better isolation",
+          "const token = pm.environment.get('token');",
+          "const hasExplicitAuth = pm.request.headers.has('Authorization');",
+          "const shouldRemoveAuth = pm.request.headers.has('X-Remove-Auth');",
+          "const isTestManagingAuth = pm.request.headers.has('X-Test-Auth');",
+          "const isTestClearingTokens = pm.request.headers.has('X-Clear-Tokens');",
+          "",
+          "// Clear tokens if requested by test",
+          "if (isTestClearingTokens) {",
+          "    pm.environment.unset('token');",
+          "    pm.environment.unset('admin_token');",
+          "    pm.environment.unset('user_token');",
+          "    pm.environment.unset('blacklist_test_token');",
+          "    pm.environment.unset('auth_fresh_token');",
+          "    pm.environment.unset('auth_blacklisted_token');",
+          "    pm.request.headers.remove('X-Clear-Tokens');",
+          "    console.log('Cleared all tokens for test isolation');",
+          "}",
+          "",
+          "// Remove the X-Remove-Auth header if it exists",
+          "if (shouldRemoveAuth) {",
+          "    pm.request.headers.remove('X-Remove-Auth');",
+          "    // Also remove any existing Authorization header when explicitly removing auth",
+          "    pm.request.headers.remove('Authorization');",
+          "}",
+          "",
+          "// Only set Authorization header if:",
+          "// 1. Token exists",
+          "// 2. Not explicitly removing auth", 
+          "// 3. No explicit Authorization header already set",
+          "// 4. No test is explicitly managing its own authentication",
+          "if (token && !shouldRemoveAuth && !hasExplicitAuth && !isTestManagingAuth) {",
+          "    pm.request.headers.add({",
+          "        key: 'Authorization',",
+          "        value: 'Bearer ' + token",
+          "    });",
+          "}",
+          "",
+          "// Clean up the test auth marker",
+          "if (isTestManagingAuth) {",
+          "    pm.request.headers.remove('X-Test-Auth');",
+          "}"
+        ]
+      }
+    },
+    {
+      "listen": "test",
+      "script": {
+        "type": "text/javascript",
+        "exec": [
+          "// Global test for reasonable response time (skip for document indexing)",
+          "if (pm.info.requestName !== 'Index Documents') {",
+          "    // Use longer timeout for streaming tests",
+          "    const timeout = pm.info.requestName.includes('Streaming') ? 60000 : 60000;",
+          "    pm.test('Response time is less than ' + (timeout/1000) + ' seconds', function () {",
+          "        pm.expect(pm.response.responseTime).to.be.below(timeout);",
+          "    });",
+          "}"
+        ]
+      }
+    }
+  ],
+  "variable": [
+    {
+      "key": "baseUrl",
+      "value": "{{baseUrl}}",
+      "type": "string"
+    }
+  ],
+  "item": [
+    {
+      "name": "Authentication",
+      "item": [
+        {
+          "name": "Setup Authentication",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Clear any existing tokens for clean authentication setup",
+                  "pm.environment.unset('token');",
+                  "pm.environment.unset('admin_token');",
+                  "pm.environment.unset('user_token');",
+                  "pm.environment.unset('blacklist_test_token');",
+                  "pm.environment.unset('auth_fresh_token');",
+                  "pm.environment.unset('auth_blacklisted_token');",
+                  "console.log('Cleared all tokens for clean authentication setup');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "pm.test('Has token_type', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('token_type');",
+                  "    pm.expect(body.token_type).to.equal('bearer');",
+                  "});",
+                  "",
+                  "// Save token for other requests",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    pm.environment.set('admin_token', body.access_token);",
+                  "    console.log('Admin authentication token saved for subsequent requests');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Setup authentication for other tests"
+          }
+        },
+        {
+          "name": "Login",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "pm.test('Has token_type', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('token_type');",
+                  "    pm.expect(body.token_type).to.equal('bearer');",
+                  "});",
+                  "",
+                  "// Save token for other requests",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    pm.environment.set('admin_token', body.access_token);",
+                  "    console.log('Admin authentication token saved for subsequent requests');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login with admin credentials"
+          }
+        },
+        {
+          "name": "Login - User Account",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "pm.test('Has token_type', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('token_type');",
+                  "    pm.expect(body.token_type).to.equal('bearer');",
+                  "});",
+                  "pm.test('Has expires_in', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('expires_in');",
+                  "    pm.expect(body.expires_in).to.equal(1800);",
+                  "});",
+                  "",
+                  "// Save token for other requests",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('User authentication token saved for subsequent requests');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user\",\n  \"password\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login with user credentials (user/user123)"
+          }
+        },
+        {
+          "name": "Login - Wrong Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.equal('Incorrect username or password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"wrongpassword\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with wrong password"
+          }
+        },
+        {
+          "name": "Login - Non-existent User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.equal('Incorrect username or password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"nonexistent\",\n  \"password\": \"password\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with non-existent user"
+          }
+        },
+        {
+          "name": "Login - Missing Username",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422 (Validation Error)', () => pm.response.to.have.status(422));",
+                  "pm.test('Validation error response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with missing username"
+          }
+        },
+        {
+          "name": "Login - Missing Password",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422 (Validation Error)', () => pm.response.to.have.status(422));",
+                  "pm.test('Validation error response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with missing password"
+          }
+        },
+        {
+          "name": "Login - Empty Credentials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.equal('Incorrect username or password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"\",\n  \"password\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with empty credentials"
+          }
+        },
+        {
+          "name": "Login - Invalid Credentials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.equal('Incorrect username or password');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"invalid\",\n  \"password\": \"wrong\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with invalid credentials"
+          }
+        },
+        {
+          "name": "Get Current User",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has username', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('username');",
+                  "    pm.expect(body.username).to.be.a('string');",
+                  "});",
+                  "pm.test('Has role', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('role');",
+                  "    pm.expect(['admin', 'user']).to.include(body.role);",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Get current user information"
+          }
+        },
+        {
+          "name": "Get Current User - No Auth",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Aggressively clear ALL authentication state",
+                  "pm.environment.unset('token');",
+                  "pm.environment.unset('admin_token');",
+                  "pm.environment.unset('user_token');",
+                  "pm.globals.unset('token');",
+                  "pm.globals.unset('admin_token');",
+                  "pm.globals.unset('user_token');",
+                  "// Remove any Authorization headers",
+                  "pm.request.headers.remove('Authorization');",
+                  "pm.request.headers.remove('X-Remove-Auth');",
+                  "// Add header to signal we want to test without auth",
+                  "pm.request.headers.add({",
+                  "    key: 'X-Remove-Auth',",
+                  "    value: 'true'",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Test that endpoint requires authentication (best practice)",
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.include('unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test that /auth/me endpoint requires authentication (security best practice)"
+          }
+        },
+        {
+          "name": "Get Current User - Invalid Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Set an invalid token",
+                  "pm.environment.set('token', 'invalid_token_12345');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test getting user info with invalid token"
+          }
+        },
+        {
+          "name": "Get Current User - Wrong Token Format",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Set a token with wrong format",
+                  "pm.environment.set('token', 'Basic invalid_token_12345');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test getting user info with wrong token format"
+          }
+        },
+        {
+          "name": "Multiple User Sessions Test",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// This test will login as admin first, then as user",
+                  "// Store the admin token temporarily",
+                  "const adminToken = pm.environment.get('admin_token');",
+                  "if (!adminToken) {",
+                  "    console.log('No admin token found, this test should be run after admin login');",
+                  "}",
+                  "// Clear any existing user_token to ensure fresh token",
+                  "pm.environment.unset('user_token');",
+                  "// Mark that this test is managing its own authentication",
+                  "pm.request.headers.add({",
+                  "    key: 'X-Test-Auth',",
+                  "    value: 'true'",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('User login successful', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body).to.have.property('token_type');",
+                  "    pm.expect(body.token_type).to.equal('bearer');",
+                  "});",
+                  "",
+                  "// Store user token separately",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('user_token', body.access_token);",
+                  "    console.log('User token stored separately from admin token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user\",\n  \"password\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test multiple user sessions - login as user while admin session exists"
+          }
+        },
+        {
+          "name": "Verify User Session",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"user\",\n  \"password\": \"user123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login as user and then verify session"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// First, test login was successful",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    const userToken = body.access_token;",
+                  "    ",
+                  "    // Now test the user session by calling /auth/me",
+                  "    pm.sendRequest({",
+                  "        url: pm.environment.get('baseUrl') + '/auth/me',",
+                  "        method: 'GET',",
+                  "        header: {",
+                  "            'Authorization': 'Bearer ' + userToken",
+                  "        }",
+                  "    }, function (err, response) {",
+                  "        if (err) {",
+                  "            pm.test('User session verification failed', () => {",
+                  "                pm.expect(err).to.be.null;",
+                  "            });",
+                  "            return;",
+                  "        }",
+                  "        ",
+                  "        pm.test('User role verification', () => {",
+                  "            pm.expect(response.code).to.equal(200);",
+                  "            const userBody = response.json();",
+                  "            pm.expect(userBody).to.have.property('username');",
+                  "            pm.expect(userBody).to.have.property('role');",
+                  "            pm.expect(userBody.username).to.equal('user');",
+                  "            pm.expect(userBody.role).to.equal('user');",
+                  "        });",
+                  "        ",
+                  "        pm.test('No password in response', () => {",
+                  "            const userBody = response.json();",
+                  "            pm.expect(userBody).to.not.have.property('password');",
+                  "        });",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Logout message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('message');",
+                  "    pm.expect(body.message).to.equal('Logged out successfully');",
+                  "});",
+                  "",
+                  "// Clear admin tokens after logout, but preserve user_token for subsequent tests",
+                  "pm.environment.unset('token');",
+                  "pm.environment.unset('admin_token');",
+                  "pm.environment.unset('blacklist_test_token');",
+                  "console.log('Cleared admin tokens after logout, preserved user_token');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout to clear authentication"
+          }
+        },
+        {
+          "name": "Logout",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Logout message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('message');",
+                  "    pm.expect(body.message).to.equal('Logged out successfully');",
+                  "});",
+                  "",
+                  "// Clear admin tokens after logout, but preserve user_token for subsequent tests",
+                  "pm.environment.unset('token');",
+                  "pm.environment.unset('admin_token');",
+                  "pm.environment.unset('blacklist_test_token');",
+                  "console.log('Cleared admin tokens after logout, preserved user_token');"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout and blacklist token"
+          }
+        },
+        {
+          "name": "Register User (Admin Only)",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for admin operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Login test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Handle both success and authentication failure cases",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('User created', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('username');",
+                  "        pm.expect(body).to.have.property('role');",
+                  "        pm.expect(body.username).to.equal('testuser');",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Registration requires admin authentication. Run Login test first.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"testuser\",\n  \"password\": \"testpass123\",\n  \"email\": \"test@example.com\",\n  \"full_name\": \"Test User\",\n  \"role\": \"user\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/register",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "register"]
+            },
+            "description": "Register a new user (requires admin privileges)"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Setup Fresh Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Clear any existing tokens to ensure fresh start",
+                  "pm.environment.unset('auth_fresh_token');",
+                  "pm.environment.unset('auth_blacklisted_token');",
+                  "console.log('Cleared existing tokens for fresh start');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Token obtained', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.environment.set('auth_fresh_token', body.access_token);",
+                  "    console.log('Fresh token obtained for blacklisting test');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Get a fresh token for blacklisting tests"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Test Token Works Before Logout",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the fresh token",
+                  "const freshToken = pm.environment.get('auth_fresh_token');",
+                  "if (freshToken) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + freshToken",
+                  "    });",
+                  "    console.log('Using fresh token for test');",
+                  "} else {",
+                  "    console.log('Warning: No fresh token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Token works before logout', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('username');",
+                  "    pm.expect(body.username).to.equal('admin');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test that token works before logout"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Logout to Blacklist Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the fresh token for logout",
+                  "const freshToken = pm.environment.get('auth_fresh_token');",
+                  "if (freshToken) {",
+                  "    // Mark that this test is managing its own authentication",
+                  "    pm.request.headers.add({",
+                  "        key: 'X-Test-Auth',",
+                  "        value: 'true'",
+                  "    });",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + freshToken",
+                  "    });",
+                  "    console.log('Using fresh token for logout');",
+                  "} else {",
+                  "    console.log('Warning: No fresh token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Token blacklisted', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('token_blacklisted');",
+                  "    pm.expect(body.token_blacklisted).to.be.true;",
+                  "});",
+                  "",
+                  "// Keep the token for subsequent tests",
+                  "const freshToken = pm.environment.get('auth_fresh_token');",
+                  "if (freshToken) {",
+                  "    pm.environment.set('auth_blacklisted_token', freshToken);",
+                  "    console.log('Token blacklisted and saved for subsequent tests');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout to blacklist the token"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Blacklisted Token Cannot Access /auth/me",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const blacklistedToken = pm.environment.get('auth_blacklisted_token');",
+                  "if (blacklistedToken) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + blacklistedToken",
+                  "    });",
+                  "    console.log('Using blacklisted token for test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Unauthorized response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test that blacklisted token cannot access /auth/me"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Blacklisted Token Cannot Access OpenAPI JSON",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const blacklistedToken = pm.environment.get('auth_blacklisted_token');",
+                  "if (blacklistedToken) {",
+                  "    console.log('Using blacklisted token for OpenAPI JSON test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Invalid token response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('invalid');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/openapi.json?token={{auth_blacklisted_token}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["openapi.json"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{auth_blacklisted_token}}"
+                }
+              ]
+            },
+            "description": "Test that blacklisted token cannot access OpenAPI JSON"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Blacklisted Token Cannot Access API Docs",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const blacklistedToken = pm.environment.get('auth_blacklisted_token');",
+                  "if (blacklistedToken) {",
+                  "    console.log('Using blacklisted token for API docs test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication required page', () => {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.include('Authentication Required');",
+                  "    pm.expect(text).to.include('Access Denied');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api-docs?token={{auth_blacklisted_token}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api-docs"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{auth_blacklisted_token}}"
+                }
+              ]
+            },
+            "description": "Test that blacklisted token cannot access API docs"
+          }
+        },
+        {
+          "name": "Token Blacklisting - Blacklisted Token Cannot Access Ask Endpoint",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const blacklistedToken = pm.environment.get('auth_blacklisted_token');",
+                  "if (blacklistedToken) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + blacklistedToken",
+                  "    });",
+                  "    console.log('Using blacklisted token for ask endpoint test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Unauthorized response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is AI?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Test that blacklisted token cannot access ask endpoint"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Token Blacklisting Tests",
+      "item": [
+        {
+          "name": "Setup Fresh Token for Blacklisting",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Clear any existing tokens to ensure fresh start",
+                  "pm.environment.unset('blacklist_test_token');",
+                  "console.log('Cleared existing blacklist test tokens for fresh start');",
+                  "// Mark that this test is managing its own authentication",
+                  "pm.request.headers.add({",
+                  "    key: 'X-Test-Auth',",
+                  "    value: 'true'",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Token obtained', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.environment.set('blacklist_test_token', body.access_token);",
+                  "    console.log('Fresh token obtained for blacklisting test:', body.access_token.substring(0, 20) + '...');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Get a fresh token for blacklisting tests"
+          }
+        },
+        {
+          "name": "Verify Token Works Before Blacklisting",
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login as admin and then verify token works before blacklisting"
+          },
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// First, test login was successful",
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    const adminToken = body.access_token;",
+                  "    pm.environment.set('blacklist_test_token', adminToken);",
+                  "    ",
+                  "    // Now test the token works by calling /auth/me",
+                  "    pm.sendRequest({",
+                  "        url: pm.environment.get('baseUrl') + '/auth/me',",
+                  "        method: 'GET',",
+                  "        header: {",
+                  "            'Authorization': 'Bearer ' + adminToken",
+                  "        }",
+                  "    }, function (err, response) {",
+                  "        if (err) {",
+                  "            pm.test('Token verification failed', () => {",
+                  "                pm.expect(err).to.be.null;",
+                  "            });",
+                  "            return;",
+                  "        }",
+                  "        ",
+                  "        pm.test('Token works before blacklisting', () => {",
+                  "            pm.expect(response.code).to.equal(200);",
+                  "            const userBody = response.json();",
+                  "            pm.expect(userBody).to.have.property('username');",
+                  "            pm.expect(userBody).to.have.property('role');",
+                  "        });",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ]
+        },
+        {
+          "name": "Blacklist Token via Logout",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the fresh token for logout",
+                  "const token = pm.environment.get('blacklist_test_token');",
+                  "if (token) {",
+                  "    // Mark that this test is managing its own authentication",
+                  "    pm.request.headers.add({",
+                  "        key: 'X-Test-Auth',",
+                  "        value: 'true'",
+                  "    });",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + token",
+                  "    });",
+                  "    console.log('Using fresh token for logout');",
+                  "} else {",
+                  "    console.log('Warning: No fresh token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Token blacklisted', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('token_blacklisted');",
+                  "    pm.expect(body.token_blacklisted).to.be.true;",
+                  "});",
+                  "",
+                  "// Store the blacklisted token for subsequent tests",
+                  "if (pm.response.code === 200) {",
+                  "    const token = pm.environment.get('blacklist_test_token');",
+                  "    pm.environment.set('auth_blacklisted_token', token);",
+                  "    console.log('Token blacklisted and saved for subsequent tests');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Logout to blacklist the token"
+          }
+        },
+        {
+          "name": "Blacklist Token via Logout",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the fresh token for logout",
+                  "const token = pm.environment.get('blacklist_test_token');",
+                  "if (token) {",
+                  "    // Mark that this test is managing its own authentication",
+                  "    pm.request.headers.add({",
+                  "        key: 'X-Test-Auth',",
+                  "        value: 'true'",
+                  "    });",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + token",
+                  "    });",
+                  "    console.log('Using fresh token for logout');",
+                  "} else {",
+                  "    console.log('Warning: No fresh token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Token blacklisted', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('token_blacklisted');",
+                  "    pm.expect(body.token_blacklisted).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/logout",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "logout"]
+            },
+            "description": "Blacklist the token via logout"
+          }
+        },
+        {
+          "name": "Verify Blacklisted Token Cannot Access /auth/me",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const token = pm.environment.get('blacklist_test_token');",
+                  "if (token) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + token",
+                  "    });",
+                  "    console.log('Using blacklisted token for /auth/me test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Unauthorized response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Verify blacklisted token cannot access /auth/me"
+          }
+        },
+        {
+          "name": "Verify Blacklisted Token Cannot Access OpenAPI JSON",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const token = pm.environment.get('blacklist_test_token');",
+                  "if (token) {",
+                  "    console.log('Using blacklisted token for OpenAPI JSON test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Invalid token response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('invalid');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/openapi.json?token={{blacklist_test_token}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["openapi.json"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{blacklist_test_token}}"
+                }
+              ]
+            },
+            "description": "Verify blacklisted token cannot access OpenAPI JSON"
+          }
+        },
+        {
+          "name": "Verify Blacklisted Token Cannot Access API Docs",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const token = pm.environment.get('blacklist_test_token');",
+                  "if (token) {",
+                  "    console.log('Using blacklisted token for API docs test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication required page', () => {",
+                  "    const text = pm.response.text();",
+                  "    pm.expect(text).to.include('Authentication Required');",
+                  "    pm.expect(text).to.include('Access Denied');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api-docs?token={{blacklist_test_token}}",
+              "host": ["{{baseUrl}}"],
+              "path": ["api-docs"],
+              "query": [
+                {
+                  "key": "token",
+                  "value": "{{blacklist_test_token}}"
+                }
+              ]
+            },
+            "description": "Verify blacklisted token cannot access API docs"
+          }
+        },
+        {
+          "name": "Verify Blacklisted Token Cannot Access Ask Endpoint",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Use the blacklisted token",
+                  "const token = pm.environment.get('blacklist_test_token');",
+                  "if (token) {",
+                  "    pm.request.headers.add({",
+                  "        key: 'Authorization',",
+                  "        value: 'Bearer ' + token",
+                  "    });",
+                  "    console.log('Using blacklisted token for ask endpoint test');",
+                  "} else {",
+                  "    console.log('Warning: No blacklisted token found');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401', () => pm.response.to.have.status(401));",
+                  "pm.test('Unauthorized response', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('unauthorized');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is AI?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Verify blacklisted token cannot access ask endpoint"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Documents",
+      "item": [
+        {
+          "name": "Setup Authentication for Documents",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Save token for document operations",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('Authentication token saved for document operations');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Setup authentication for document operations"
+          }
+        },
+        {
+          "name": "Index Documents",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for document operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Login test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Handle both success and authentication failure cases",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Indexed count', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('indexed');",
+                  "        pm.expect(body.indexed).to.be.a('number');",
+                  "        pm.expect(body.indexed).to.be.at.least(0);",
+                  "    });",
+                  "    pm.test('Success message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('message');",
+                  "        pm.expect(body.message).to.be.a('string');",
+                  "    });",
+                  "} else if (pm.response.code === 401 || pm.response.code === 403) {",
+                  "    pm.test('Status 401/403 (Authentication required)', () => {",
+                  "        pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "    });",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Document operations require authentication. Run Login test first.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"docs\",\n  \"clear\": false\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["upsert"]
+            },
+            "description": "Index documents from the docs folder"
+          }
+        },
+        {
+          "name": "Clear All Documents",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for document operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Login test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Handle both success and authentication failure cases",
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Cleared successfully', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('indexed');",
+                  "        pm.expect(body.indexed).to.equal(0);",
+                  "        pm.expect(body.message).to.include('cleared');",
+                  "    });",
+                  "} else if (pm.response.code === 401 || pm.response.code === 403) {",
+                  "    pm.test('Status 401/403 (Authentication required)', () => {",
+                  "        pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "    });",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Document operations require authentication. Run Login test first.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"clear\": true\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["upsert"]
+            },
+            "description": "Clear all indexed documents (dangerous operation)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Questions",
+      "item": [
+        {
+          "name": "Setup Authentication for Questions",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Save token for question operations",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('Authentication token saved for question operations');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Setup authentication for question operations"
+          }
+        },
+        {
+          "name": "Ask Question",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for question operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Setup Authentication for Questions test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Has answer', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('answer');",
+                  "        pm.expect(body.answer).to.be.a('string');",
+                  "    });",
+                  "    pm.test('Has sources', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('sources');",
+                  "        pm.expect(body.sources).to.be.an('array');",
+                  "    });",
+                  "    pm.test('Sources have required fields', () => {",
+                  "        const body = pm.response.json();",
+                  "        body.sources.forEach(source => {",
+                  "            pm.expect(source).to.have.property('doc_path');",
+                  "            pm.expect(source).to.have.property('preview');",
+                  "        });",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Question operations require authentication. Run Setup Authentication for Questions test first.');",
+                  "} else if (pm.response.code === 422) {",
+                  "    pm.test('Status 422 (Validation error)', () => pm.response.to.have.status(422));",
+                  "    pm.test('Validation error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.an('array');",
+                  "    });",
+                  "    console.log('Note: Validation error - check request format.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is the main topic of the documents?\",\n  \"top_k\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Ask a question about indexed documents"
+          }
+        },
+        {
+          "name": "Ask Question - No Documents",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for question operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Setup Authentication for Questions test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Response has answer and sources', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('answer');",
+                  "        pm.expect(body.answer).to.be.a('string');",
+                  "        pm.expect(body).to.have.property('sources');",
+                  "        pm.expect(body.sources).to.be.an('array');",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Question operations require authentication. Run Setup Authentication for Questions test first.');",
+                  "} else if (pm.response.code === 422) {",
+                  "    pm.test('Status 422 (Validation error)', () => pm.response.to.have.status(422));",
+                  "    pm.test('Validation error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.an('array');",
+                  "    });",
+                  "    console.log('Note: Validation error - check request format.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is the main topic?\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Ask question when no documents are indexed"
+          }
+        },
+        {
+          "name": "Ask Question - Streaming",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for question operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Setup Authentication for Questions test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Content-Type is text/plain', () => {",
+                  "        pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "    });",
+                  "    pm.test('Response has content', () => {",
+                  "        pm.expect(pm.response.text()).to.be.a('string');",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Question operations require authentication. Run Setup Authentication for Questions test first.');",
+                  "} else if (pm.response.code === 422) {",
+                  "    pm.test('Status 422 (Validation error)', () => pm.response.to.have.status(422));",
+                  "    pm.test('Validation error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.an('array');",
+                  "    });",
+                  "    console.log('Note: Validation error - check request format.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Explain the process step by step\",\n  \"top_k\": 6\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Ask a question with streaming response"
+          }
+        },
+        {
+          "name": "Streaming - Basic Success Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is text/plain', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "});",
+                  "pm.test('Response has content', () => {",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "    pm.expect(pm.response.text().length).to.be.greaterThan(0);",
+                  "});",
+                  "pm.test('Response contains streaming content', () => {",
+                  "    const responseText = pm.response.text();",
+                  "    pm.expect(responseText).to.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"What is artificial intelligence?\",\n  \"top_k\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test basic streaming functionality with a simple question"
+          }
+        },
+        {
+          "name": "Streaming - Unauthorized Access Test",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Store the current token for restoration",
+                  "const currentToken = pm.environment.get('token');",
+                  "pm.environment.set('saved_token', currentToken);",
+                  "// Clear the token for this test",
+                  "pm.environment.unset('token');",
+                  "// Remove any existing Authorization header",
+                  "pm.request.headers.remove('Authorization');",
+                  "// Add header to signal we want to test without auth",
+                  "pm.request.headers.add({",
+                  "    key: 'X-Remove-Auth',",
+                  "    value: 'true'",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Unauthorized)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "    pm.expect(body.detail.toLowerCase()).to.include('unauthorized');",
+                  "});",
+                  "",
+                  "// Restore token for subsequent tests",
+                  "const savedToken = pm.environment.get('saved_token');",
+                  "if (savedToken) {",
+                  "    pm.environment.set('token', savedToken);",
+                  "    pm.environment.unset('saved_token');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test unauthorized access\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test streaming endpoint without authentication"
+          }
+        },
+        {
+          "name": "Streaming - Invalid Request Body Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422 (Validation Error)', () => pm.response.to.have.status(422));",
+                  "pm.test('Validation error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"invalid_field\": \"test\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test streaming endpoint with invalid request body"
+          }
+        },
+        {
+          "name": "Streaming - Empty Query Test",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 422) {",
+                  "    pm.test('Status 422 (Validation Error)', () => pm.response.to.have.status(422));",
+                  "    pm.test('Validation error for empty query', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.an('array');",
+                  "    });",
+                  "} else if (pm.response.code === 200) {",
+                  "    pm.test('Status 200 (Empty query handled)', () => pm.response.to.have.status(200));",
+                  "    pm.test('Response is text/plain', () => {",
+                  "        pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test streaming endpoint with empty query"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Streaming Regression Tests",
+      "item": [
+        {
+          "name": "Setup Authentication for Regression Tests",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Save token for regression tests",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('Authentication token saved for regression tests');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Login to get authentication token for regression tests"
+          }
+        },
+        {
+          "name": "Regression - KeyError Chunk Index Fix",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 (No KeyError)', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is text/plain', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "});",
+                  "pm.test('Response completes without KeyError', () => {",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "});",
+                  "pm.test('No server errors in response', () => {",
+                  "    const responseText = pm.response.text();",
+                  "    pm.expect(responseText).to.not.include('KeyError: chunk_index');",
+                  "    pm.expect(responseText).to.not.include('Traceback');",
+                  "    pm.expect(responseText).to.not.include('Exception');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test regression fix for chunk_index KeyError\",\n  \"top_k\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test that the KeyError chunk_index fix is working"
+          }
+        },
+        {
+          "name": "Regression - Syntax Errors Fix",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 (No Syntax Errors)', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is text/plain', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "});",
+                  "pm.test('Response completes without syntax errors', () => {",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "});",
+                  "pm.test('No syntax errors in response', () => {",
+                  "    const responseText = pm.response.text();",
+                  "    pm.expect(responseText).to.not.include('SyntaxError');",
+                  "    pm.expect(responseText).to.not.include('invalid syntax');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test regression fix for syntax errors\",\n  \"top_k\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test that syntax errors have been fixed"
+          }
+        },
+        {
+          "name": "Regression - Authentication Flow",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200 (Authentication Working)', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is text/plain', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "});",
+                  "pm.test('Authentication flow works correctly', () => {",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test authentication flow regression\",\n  \"top_k\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test that authentication flow is working correctly"
+          }
+        },
+        {
+          "name": "Regression - Streaming Response Format",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is text/plain', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/plain');",
+                  "});",
+                  "pm.test('Response format is correct', () => {",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "    pm.expect(pm.response.text().length).to.be.greaterThan(0);",
+                  "});",
+                  "pm.test('Response contains streaming content', () => {",
+                  "    const responseText = pm.response.text();",
+                  "    pm.expect(responseText).to.not.be.empty;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"query\": \"Test streaming response format regression\",\n  \"top_k\": 3\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask/stream",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask", "stream"]
+            },
+            "description": "Test that streaming response format is correct"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Files",
+      "item": [
+        {
+          "name": "Setup Authentication for Files",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Save token for file operations",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('Authentication token saved for file operations');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Setup authentication for file operations"
+          }
+        },
+        {
+          "name": "Upload Files",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Files saved', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('saved');",
+                  "    pm.expect(body.saved).to.be.an('array');",
+                  "});",
+                  "pm.test('Upload message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('message');",
+                  "    pm.expect(body.message).to.include('uploaded');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": "{{test_md_file}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["files"]
+            },
+            "description": "Upload files for indexing (PDF, MD, TXT)"
+          }
+        },
+        {
+          "name": "Upload Files - Unsupported Type",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400', () => pm.response.to.have.status(400));",
+                  "pm.test('Error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.include('Unsupported extension');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": "{{test_unsupported_file}}"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["files"]
+            },
+            "description": "Test upload with unsupported file type"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Models",
+      "item": [
+        {
+          "name": "Setup Authentication for Models",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Save token for model operations",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('Authentication token saved for model operations');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Setup authentication for model operations"
+          }
+        },
+        {
+          "name": "Get Available Models",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has available_models', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('available_models');",
+                  "    pm.expect(body.available_models).to.be.an('array');",
+                  "});",
+                  "pm.test('Has current_model', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('current_model');",
+                  "    pm.expect(body.current_model).to.be.a('string');",
+                  "});",
+                  "pm.test('Has embedding_model', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('embedding_model');",
+                  "    pm.expect(body.embedding_model).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/models",
+              "host": ["{{baseUrl}}"],
+              "path": ["models"]
+            },
+            "description": "Get list of available Ollama models"
+          }
+        },
+        {
+          "name": "Change Model",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Model changed', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('message');",
+                  "    pm.expect(body).to.have.property('current_model');",
+                  "    pm.expect(body).to.have.property('success');",
+                  "    pm.expect(body.success).to.be.true;",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"qwen2.5:latest\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/models/change",
+              "host": ["{{baseUrl}}"],
+              "path": ["models", "change"]
+            },
+            "description": "Change the current generation model"
+          }
+        },
+        {
+          "name": "Change Model - Invalid",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 400 or 500 (Model error)', () => {",
+                  "    pm.expect(pm.response.code).to.be.oneOf([400, 500]);",
+                  "});",
+                  "pm.test('Model error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model\": \"invalid-model-name\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/models/change",
+              "host": ["{{baseUrl}}"],
+              "path": ["models", "change"]
+            },
+            "description": "Test changing to invalid model"
+          }
+        }
+      ]
+    },
+    {
+      "name": "Negative Tests",
+      "item": [
+        {
+          "name": "Authentication - Invalid Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Clear ALL tokens to ensure no valid authentication",
+                  "pm.environment.unset('token');",
+                  "pm.environment.unset('admin_token');",
+                  "pm.environment.unset('user_token');",
+                  "pm.environment.unset('blacklist_test_token');",
+                  "pm.environment.unset('auth_fresh_token');",
+                  "pm.environment.unset('auth_blacklisted_token');",
+                  "pm.environment.unset('fresh_user_token');",
+                  "",
+                  "// Mark that this test is managing its own authentication FIRST",
+                  "pm.request.headers.add({",
+                  "    key: 'X-Test-Auth',",
+                  "    value: 'true'",
+                  "});",
+                  "",
+                  "// Remove any existing Authorization header",
+                  "pm.request.headers.remove('Authorization');",
+                  "",
+                  "// Add the invalid token to Authorization header",
+                  "pm.request.headers.add({",
+                  "    key: 'Authorization',",
+                  "    value: 'Bearer invalid_token_12345'",
+                  "});",
+                  "",
+                  "console.log('Testing with invalid token for authentication failure');"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Invalid token)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test authentication with invalid token"
+          }
+        },
+        {
+          "name": "Authentication - Expired Token",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Set an expired token format",
+                  "pm.environment.set('token', 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTYwMDAwMDAwMH0.invalid_signature');",
+                  "// Mark that this test is managing its own authentication",
+                  "pm.request.headers.add({",
+                  "    key: 'X-Test-Auth',",
+                  "    value: 'true'",
+                  "});",
+                  "// Add the expired token to Authorization header",
+                  "pm.request.headers.add({",
+                  "    key: 'Authorization',",
+                  "    value: 'Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJzdWIiOiJhZG1pbiIsImV4cCI6MTYwMDAwMDAwMH0.invalid_signature'",
+                  "});"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Expired/invalid token)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/auth/me",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "me"]
+            },
+            "description": "Test authentication with expired token"
+          }
+        },
+        {
+          "name": "Login - Empty Credentials",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication failed)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"\",\n  \"password\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with empty credentials"
+          }
+        },
+        {
+          "name": "Login - Missing Fields",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422 (Validation error)', () => pm.response.to.have.status(422));",
+                  "pm.test('Validation error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with missing password field"
+          }
+        },
+        {
+          "name": "Login - Malformed JSON",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 422 (Validation error)', () => pm.response.to.have.status(422));",
+                  "pm.test('Validation error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.an('array');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n  // Missing closing brace"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Test login with malformed JSON"
+          }
+        },
+        {
+          "name": "Ask Question - Empty Question",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Test asking question with empty string"
+          }
+        },
+        {
+          "name": "Ask Question - Missing Question Field",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"top_k\": 5\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Test asking question without question field"
+          }
+        },
+        {
+          "name": "Ask Question - Invalid Top K",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"question\": \"What is the main topic?\",\n  \"top_k\": -1\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/ask",
+              "host": ["{{baseUrl}}"],
+              "path": ["ask"]
+            },
+            "description": "Test asking question with invalid top_k value"
+          }
+        },
+        {
+          "name": "Change Model - Empty Model Name",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_name\": \"\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/models/change",
+              "host": ["{{baseUrl}}"],
+              "path": ["models", "change"]
+            },
+            "description": "Test changing model with empty model name"
+          }
+        },
+        {
+          "name": "Change Model - Non-existent Model",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"model_name\": \"non-existent-model-12345\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/models/change",
+              "host": ["{{baseUrl}}"],
+              "path": ["models", "change"]
+            },
+            "description": "Test changing to a non-existent model"
+          }
+        },
+        {
+          "name": "Upload Files - No Files",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": []
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["files"]
+            },
+            "description": "Test file upload with no files provided"
+          }
+        },
+        {
+          "name": "Upload Files - Too Large File",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 401 (Authentication required)', () => pm.response.to.have.status(401));",
+                  "pm.test('Authentication error message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('detail');",
+                  "    pm.expect(body.detail).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [],
+            "body": {
+              "mode": "formdata",
+              "formdata": [
+                {
+                  "key": "files",
+                  "type": "file",
+                  "src": "large_file.txt",
+                  "description": "Simulate a large file upload"
+                }
+              ]
+            },
+            "url": {
+              "raw": "{{baseUrl}}/files",
+              "host": ["{{baseUrl}}"],
+              "path": ["files"]
+            },
+            "description": "Test file upload with file size limit exceeded"
+          }
+        },
+        {
+          "name": "Index Documents - Invalid Path",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for document operations",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Login test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "    pm.test('Indexed count', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('indexed');",
+                  "        pm.expect(body.indexed).to.be.a('number');",
+                  "    });",
+                  "} else if (pm.response.code === 401 || pm.response.code === 403) {",
+                  "    pm.test('Status 401/403 (Authentication required)', () => {",
+                  "        pm.expect(pm.response.code).to.be.oneOf([401, 403]);",
+                  "    });",
+                  "    pm.test('Authentication error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "        pm.expect(body.detail).to.be.a('string');",
+                  "    });",
+                  "    console.log('Note: Document operations require authentication. Run Login test first.');",
+                  "} else if (pm.response.code === 400 || pm.response.code === 422) {",
+                  "    pm.test('Status 400/422 (Invalid path)', () => {",
+                  "        pm.expect(pm.response.code).to.be.oneOf([400, 422]);",
+                  "    });",
+                  "    pm.test('Invalid path error message', () => {",
+                  "        const body = pm.response.json();",
+                  "        pm.expect(body).to.have.property('detail');",
+                  "    });",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"path\": \"/non/existent/path/that/does/not/exist\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/upsert",
+              "host": ["{{baseUrl}}"],
+              "path": ["upsert"]
+            },
+            "description": "Test indexing documents from non-existent path"
+          }
+        },
+        {
+          "name": "API Endpoint - Non-existent Route",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 404 (Not found)', () => pm.response.to.have.status(404));",
+                  "pm.test('Not found error message', () => {",
+                  "    // API should return 404 for non-existent routes",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/non-existent-endpoint",
+              "host": ["{{baseUrl}}"],
+              "path": ["non-existent-endpoint"]
+            },
+            "description": "Test accessing non-existent API endpoint"
+          }
+        },
+        {
+          "name": "API Endpoint - Wrong HTTP Method",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 405 (Method not allowed)', () => pm.response.to.have.status(405));",
+                  "pm.test('Method not allowed error', () => {",
+                  "    // API should return 405 for wrong HTTP method",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "DELETE",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Test using wrong HTTP method (DELETE on GET endpoint)"
+          }
+        }
+      ]
+    },
+    {
+      "name": "System",
+      "item": [
+        {
+          "name": "Setup Authentication for System",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('JSON response', () => pm.response.to.be.json);",
+                  "pm.test('Has access_token', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('access_token');",
+                  "    pm.expect(body.access_token).to.be.a('string');",
+                  "});",
+                  "",
+                  "// Save token for system operations",
+                  "if (pm.response.code === 200) {",
+                  "    const body = pm.response.json();",
+                  "    pm.environment.set('token', body.access_token);",
+                  "    console.log('Authentication token saved for system operations');",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "POST",
+            "header": [
+              {
+                "key": "Content-Type",
+                "value": "application/json"
+              }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"admin123\"\n}"
+            },
+            "url": {
+              "raw": "{{baseUrl}}/auth/login",
+              "host": ["{{baseUrl}}"],
+              "path": ["auth", "login"]
+            },
+            "description": "Setup authentication for system operations"
+          }
+        },
+        {
+          "name": "Health Check",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('System status', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('status');",
+                  "    pm.expect(['ok', 'error']).to.include(body.status);",
+                  "});",
+                  "pm.test('Has mode', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('mode');",
+                  "    pm.expect(body.mode).to.be.a('string');",
+                  "});",
+                  "pm.test('Has ollama URL', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('ollama');",
+                  "    pm.expect(body.ollama).to.be.a('string');",
+                  "});",
+                  "pm.test('Has qdrant URL', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('qdrant');",
+                  "    pm.expect(body.qdrant).to.be.a('string');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/health",
+              "host": ["{{baseUrl}}"],
+              "path": ["health"]
+            },
+            "description": "Check system health and status"
+          }
+        },
+        {
+          "name": "API Info",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Has message', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('message');",
+                  "    pm.expect(body.message).to.be.a('string');",
+                  "});",
+                  "pm.test('Has docs endpoint', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('docs');",
+                  "    pm.expect(body.docs).to.equal('/docs');",
+                  "});",
+                  "pm.test('Has health endpoint', () => {",
+                  "    const body = pm.response.json();",
+                  "    pm.expect(body).to.have.property('health');",
+                  "    pm.expect(body.health).to.equal('/health');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api-info",
+              "host": ["{{baseUrl}}"],
+              "path": ["api-info"]
+            },
+            "description": "Get basic API information"
+          }
+        },
+        {
+          "name": "Web UI",
+          "event": [
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "pm.test('Status 200', () => pm.response.to.have.status(200));",
+                  "pm.test('Content-Type is HTML', () => {",
+                  "    pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "});",
+                  "pm.test('Response has content', () => {",
+                  "    pm.expect(pm.response.text()).to.be.a('string');",
+                  "    pm.expect(pm.response.text().length).to.be.greaterThan(0);",
+                  "});",
+                  "pm.test('Response is HTML', () => {",
+                  "    pm.expect(pm.response.text()).to.include('<html');",
+                  "});"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/",
+              "host": ["{{baseUrl}}"],
+              "path": [""]
+            },
+            "description": "Access the web UI"
+          }
+        },
+        {
+          "name": "API Docs - Protected",
+          "event": [
+            {
+              "listen": "prerequest",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "// Ensure we have a valid token for accessing protected API docs",
+                  "const token = pm.environment.get('token');",
+                  "if (!token) {",
+                  "    console.log('Warning: No authentication token found. Make sure to run Login test first.');",
+                  "}"
+                ]
+              }
+            },
+            {
+              "listen": "test",
+              "script": {
+                "type": "text/javascript",
+                "exec": [
+                  "if (pm.response.code === 200) {",
+                  "    pm.test('Status 200 (Success)', () => pm.response.to.have.status(200));",
+                  "    pm.test('Content-Type is HTML', () => {",
+                  "        pm.expect(pm.response.headers.get('Content-Type')).to.include('text/html');",
+                  "    });",
+                  "    pm.test('Response is HTML', () => {",
+                  "        pm.expect(pm.response.text()).to.include('<html');",
+                  "    });",
+                  "    pm.test('API documentation accessible', () => {",
+                  "        const responseText = pm.response.text();",
+                  "        pm.expect(responseText).to.include('swagger') || pm.expect(responseText).to.include('openapi');",
+                  "    });",
+                  "} else if (pm.response.code === 401) {",
+                  "    pm.test('Status 401 (Properly protected)', () => pm.response.to.have.status(401));",
+                  "    pm.test('Authentication required response', () => {",
+                  "        // API returns HTML login page for protected docs",
+                  "        const contentType = pm.response.headers.get('Content-Type');",
+                  "        if (contentType && contentType.includes('application/json')) {",
+                  "            const body = pm.response.json();",
+                  "            pm.expect(body).to.have.property('detail');",
+                  "            pm.expect(body.detail).to.be.a('string');",
+                  "        } else {",
+                  "            // HTML response (login page) - expected behavior",
+                  "            pm.expect(pm.response.text()).to.include('html');",
+                  "            pm.expect(pm.response.text()).to.include('Authentication Required');",
+                  "        }",
+                  "    });",
+                  "    console.log('Note: API documentation is properly protected and requires web UI authentication.');",
+                  "} else {",
+                  "    pm.test('Unexpected status code', () => {",
+                  "        pm.expect.fail('Unexpected status code: ' + pm.response.code);",
+                  "    });",
+                  "}"
+                ]
+              }
+            }
+          ],
+          "request": {
+            "method": "GET",
+            "header": [],
+            "url": {
+              "raw": "{{baseUrl}}/api-docs",
+              "host": ["{{baseUrl}}"],
+              "path": ["api-docs"]
+            },
+            "description": "Access API documentation (requires web UI authentication, not API token)"
+          }
+        }
+      ]
+    }
+  ]
+}

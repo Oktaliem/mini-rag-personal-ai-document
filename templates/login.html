@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mini RAG - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #f8fafc 0%, #e2e8f0 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #2d3748;
+            position: relative;
+        }
+
+        body::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: 
+                radial-gradient(circle at 25% 25%, rgba(255, 255, 255, 0.8) 0%, transparent 50%),
+                radial-gradient(circle at 75% 75%, rgba(226, 232, 240, 0.6) 0%, transparent 50%);
+            pointer-events: none;
+        }
+
+        .login-container {
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 20px;
+            padding: 50px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.08);
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+            position: relative;
+            z-index: 1;
+        }
+
+        .logo {
+            font-size: 2.5rem;
+            margin-bottom: 10px;
+            color: #2d3748;
+        }
+
+        .title {
+            font-size: 1.8rem;
+            margin-bottom: 10px;
+            color: #1a202c;
+            font-weight: 600;
+        }
+
+        .subtitle {
+            color: #718096;
+            margin-bottom: 40px;
+            font-weight: 400;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+            text-align: left;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 600;
+            color: #4a5568;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 16px;
+            border: 1px solid #e2e8f0;
+            border-radius: 12px;
+            font-size: 15px;
+            transition: all 0.3s ease;
+            background: rgba(255, 255, 255, 0.8);
+        }
+
+        .form-group input:focus {
+            outline: none;
+            border-color: #4a5568;
+            box-shadow: 0 0 0 3px rgba(74, 85, 104, 0.1);
+            background: white;
+        }
+
+        .btn {
+            background: #2d3748;
+            color: white;
+            border: none;
+            padding: 16px 24px;
+            border-radius: 12px;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 600;
+            transition: all 0.3s ease;
+            width: 100%;
+        }
+
+        .btn:hover {
+            background: #1a202c;
+            transform: translateY(-1px);
+            box-shadow: 0 8px 25px rgba(45, 55, 72, 0.3);
+        }
+
+        .btn:disabled {
+            opacity: 0.6;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .error {
+            background-color: #fed7d7;
+            color: #742a2a;
+            border: 1px solid #feb2b2;
+            padding: 12px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+            font-size: 14px;
+        }
+
+        .loading {
+            display: inline-block;
+            width: 20px;
+            height: 20px;
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #667eea;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .demo-credentials {
+            background-color: rgba(237, 242, 247, 0.8);
+            padding: 20px;
+            border-radius: 12px;
+            margin-top: 25px;
+            font-size: 13px;
+            color: #4a5568;
+            border: 1px solid rgba(226, 232, 240, 0.5);
+        }
+
+        .demo-credentials h4 {
+            margin-bottom: 10px;
+            color: #2d3748;
+        }
+
+        .demo-credentials p {
+            margin: 5px 0;
+        }
+
+        .demo-credentials code {
+            background-color: #e2e8f0;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="logo">🤖</div>
+        <h1 class="title">Mini RAG</h1>
+        <p class="subtitle">Sign in to access your AI Document Assistant</p>
+        
+        <form id="loginForm">
+            <div class="form-group">
+                <label for="username">Username</label>
+                <input type="text" id="username" name="username" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="password">Password</label>
+                <input type="password" id="password" name="password" required>
+            </div>
+            
+            <button type="submit" class="btn" id="loginBtn">Sign In</button>
+        </form>
+        
+        <div id="errorMessage" class="error" style="display: none;"></div>
+        
+        <div class="demo-credentials">
+            <h4>Demo Credentials</h4>
+            <p><strong>Admin:</strong> <code>admin</code> / <code>admin123</code></p>
+            <p><strong>User:</strong> <code>user</code> / <code>user123</code></p>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = window.location.origin;
+        let authToken = localStorage.getItem('authToken');
+
+        // Check if already logged in
+        if (authToken) {
+            window.location.href = '/';
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async function(e) {
+            e.preventDefault();
+            
+            const username = document.getElementById('username').value;
+            const password = document.getElementById('password').value;
+            const loginBtn = document.getElementById('loginBtn');
+            const errorDiv = document.getElementById('errorMessage');
+            
+            // Show loading state
+            loginBtn.disabled = true;
+            loginBtn.innerHTML = '<span class="loading"></span> Signing in...';
+            errorDiv.style.display = 'none';
+            
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        username: username,
+                        password: password
+                    })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    // Store both access and refresh tokens for sliding session
+                    if (data.access_token) {
+                        localStorage.setItem('authToken', data.access_token);
+                    }
+                    if (data.refresh_token) {
+                        localStorage.setItem('refreshToken', data.refresh_token);
+                    }
+                    localStorage.setItem('user', JSON.stringify({ username: username }));
+                    window.location.href = '/';
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Login failed');
+                }
+            } catch (error) {
+                errorDiv.textContent = error.message;
+                errorDiv.style.display = 'block';
+                loginBtn.disabled = false;
+                loginBtn.textContent = 'Sign In';
+            }
+        });
+
+        // Auto-fill demo credentials on click
+        document.querySelectorAll('.demo-credentials code').forEach(code => {
+            code.style.cursor = 'pointer';
+            code.addEventListener('click', function() {
+                if (this.textContent.includes('admin')) {
+                    document.getElementById('username').value = 'admin';
+                    document.getElementById('password').value = 'admin123';
+                } else if (this.textContent.includes('user')) {
+                    document.getElementById('username').value = 'user';
+                    document.getElementById('password').value = 'user123';
+                }
+            });
+        });
+    </script>
+</body>
+</html>

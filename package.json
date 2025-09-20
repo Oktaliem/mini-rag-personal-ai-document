@@ -1,0 +1,35 @@
+{
+  "name": "mini-rag-e2e-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for Mini RAG application using Playwright",
+  "scripts": {
+    "test": "playwright test",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:headed": "playwright test --headed",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:mobile": "playwright test --project='Mobile Chrome' --project='Mobile Safari'",
+    "test:auth": "playwright test auth.spec.js",
+    "test:dashboard": "playwright test dashboard.spec.js",
+    "test:documents": "playwright test documents.spec.js",
+    "test:questions": "playwright test questions.spec.js",
+    "test:models": "playwright test models.spec.js",
+    "test:api": "playwright test api.spec.js",
+    "install-browsers": "playwright install",
+    "install-deps": "playwright install-deps"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0"
+  },
+  "keywords": [
+    "e2e",
+    "testing",
+    "playwright",
+    "mini-rag",
+    "automation"
+  ],
+  "author": "Mini RAG Team",
+  "license": "MIT"
+}

@@ -1,0 +1,852 @@
+openapi: 3.1.0
+info:
+  title: Mini RAG API
+  version: 2.0.0
+  description: |
+    A Retrieval Augmented Generation (RAG) API that allows users to:
+    - Upload and index documents (PDF, MD, TXT)
+    - Ask questions about indexed documents
+    - Manage AI models and authentication
+    - Access protected API documentation
+    
+    The system uses Qdrant for vector storage and Ollama for text generation and embeddings.
+  contact:
+    name: Mini RAG API
+  license:
+    name: MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development server
+  - url: http://localhost:80
+    description: Production server (via Nginx)
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Documents
+    description: Document management and indexing
+  - name: Questions
+    description: Question answering and RAG functionality
+  - name: Models
+    description: AI model management
+  - name: System
+    description: System health and information
+  - name: Files
+    description: File upload and management
+
+security:
+  - bearerAuth: []
+
+paths:
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: Authenticate user
+      description: Login with username and password to receive JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserLogin'
+            examples:
+              admin:
+                summary: Admin login
+                value:
+                  username: admin
+                  password: admin123
+              user:
+                summary: Regular user login
+                value:
+                  username: user
+                  password: user123
+      responses:
+        '200':
+          description: Successful authentication
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Token'
+              examples:
+                success:
+                  summary: Successful login
+                  value:
+                    access_token: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+                    token_type: bearer
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                invalid_credentials:
+                  summary: Invalid credentials
+                  value:
+                    detail: Incorrect username or password
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: Logout user
+      description: Logout and blacklist current JWT token
+      security: []
+      responses:
+        '200':
+          description: Successful logout
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Logged out successfully
+                  token_blacklisted:
+                    type: boolean
+                    example: true
+
+  /auth/me:
+    get:
+      tags:
+        - Authentication
+      summary: Get current user
+      description: Get information about the currently authenticated user
+      responses:
+        '200':
+          description: User information
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+              examples:
+                admin_user:
+                  summary: Admin user info
+                  value:
+                    username: admin
+                    email: admin@example.com
+                    full_name: Administrator
+                    is_active: true
+                    role: admin
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /auth/register:
+    post:
+      tags:
+        - Authentication
+      summary: Register new user
+      description: Register a new user (admin only)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreate'
+            examples:
+              new_user:
+                summary: New user registration
+                value:
+                  username: newuser
+                  password: password123
+                  email: newuser@example.com
+                  full_name: New User
+                  role: user
+      responses:
+        '200':
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+        '400':
+          description: Username already exists
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                username_exists:
+                  summary: Username already exists
+                  value:
+                    detail: Username already registered
+        '403':
+          $ref: '#/components/responses/ForbiddenError'
+
+  /:
+    get:
+      tags:
+        - System
+      summary: Web UI
+      description: Serve the main web interface
+      security: []
+      responses:
+        '200':
+          description: HTML web interface
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /login:
+    get:
+      tags:
+        - System
+      summary: Login page
+      description: Serve the login page
+      security: []
+      responses:
+        '200':
+          description: HTML login page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  /health:
+    get:
+      tags:
+        - System
+      summary: Health check
+      description: Check system health and status
+      security: []
+      responses:
+        '200':
+          description: System is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    enum: [ok, error]
+                    example: ok
+                  mode:
+                    type: string
+                    example: qdrant (persistent)
+                  ollama:
+                    type: string
+                    example: http://localhost:11434
+                  qdrant:
+                    type: string
+                    example: http://localhost:6333
+                  documents_indexed:
+                    type: integer
+                    example: 479
+                  message:
+                    type: string
+                    example: Running with Qdrant vector database
+                  error:
+                    type: string
+                    description: Error message if status is error
+
+  /upsert:
+    post:
+      tags:
+        - Documents
+      summary: Index documents
+      description: Index documents from a specified path or clear all indexed data
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UpsertRequest'
+            examples:
+              index_docs:
+                summary: Index documents from docs folder
+                value:
+                  path: docs
+                  clear: false
+              clear_all:
+                summary: Clear all indexed data
+                value:
+                  clear: true
+      responses:
+        '200':
+          description: Documents indexed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  indexed:
+                    type: integer
+                    description: Number of chunks indexed
+                    example: 150
+                  message:
+                    type: string
+                    example: Indexed 150 chunks in Qdrant
+        '500':
+          description: Indexing failed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /ask:
+    post:
+      tags:
+        - Questions
+      summary: Ask a question
+      description: Ask a question about indexed documents and get an answer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+            examples:
+              simple_question:
+                summary: Simple question
+                value:
+                  query: What is the main topic of the documents?
+                  top_k: 5
+              complex_question:
+                summary: Complex question with custom top_k
+                value:
+                  query: Explain the key concepts discussed in the technical documentation
+                  top_k: 10
+      responses:
+        '200':
+          description: Answer generated successfully
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AskResponse'
+              examples:
+                with_sources:
+                  summary: Answer with sources
+                  value:
+                    answer: Based on the documents, the main topic is...
+                    sources:
+                      - doc_path: docs/technical_guide.pdf
+                        preview: This document covers the fundamental concepts...
+                      - doc_path: docs/overview.md
+                        preview: The overview provides a high-level summary...
+                no_documents:
+                  summary: No documents indexed
+                  value:
+                    answer: No documents indexed. Use /upsert to index documents first.
+                    sources: []
+        '500':
+          description: Error during question processing
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /ask/stream:
+    post:
+      tags:
+        - Questions
+      summary: Ask a question (streaming)
+      description: Ask a question and get a streaming response
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AskRequest'
+            examples:
+              streaming_question:
+                summary: Streaming question
+                value:
+                  query: Explain the process step by step
+                  top_k: 6
+      responses:
+        '200':
+          description: Streaming response
+          content:
+            text/plain:
+              schema:
+                type: string
+                description: Streaming text response
+        '500':
+          description: Error during streaming
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /files:
+    post:
+      tags:
+        - Files
+      summary: Upload files
+      description: Upload and index files (PDF, MD, TXT)
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                files:
+                  type: array
+                  items:
+                    type: string
+                    format: binary
+                  description: Files to upload
+            examples:
+              single_file:
+                summary: Upload single PDF
+                value:
+                  files: [document.pdf]
+              multiple_files:
+                summary: Upload multiple files
+                value:
+                  files: [doc1.pdf, doc2.md, doc3.txt]
+      responses:
+        '200':
+          description: Files uploaded successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  saved:
+                    type: array
+                    items:
+                      type: string
+                    example: ["docs/document.pdf", "docs/guide.md"]
+                  message:
+                    type: string
+                    example: Files uploaded. Indexing has started.
+        '400':
+          description: Unsupported file type
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                unsupported_file:
+                  summary: Unsupported file type
+                  value:
+                    detail: Unsupported extension: .docx
+
+  /api-info:
+    get:
+      tags:
+        - System
+      summary: API information
+      description: Get basic API information
+      security: []
+      responses:
+        '200':
+          description: API information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Mini RAG API with Qdrant
+                  docs:
+                    type: string
+                    example: /docs
+                  health:
+                    type: string
+                    example: /health
+                  web_ui:
+                    type: string
+                    example: /
+                  mode:
+                    type: string
+                    example: qdrant vector database (persistent)
+
+  /models:
+    get:
+      tags:
+        - Models
+      summary: Get available models
+      description: Get list of available Ollama models
+      security: []
+      responses:
+        '200':
+          description: Available models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  available_models:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Model'
+                  current_model:
+                    type: string
+                    example: llama3.1:8b
+                  embedding_model:
+                    type: string
+                    example: nomic-embed-text
+              examples:
+                success:
+                  summary: Available models
+                  value:
+                    available_models:
+                      - name: llama3.1:8b
+                        size: 4838375424
+                        modified_at: 2024-01-15T10:30:00Z
+                        details:
+                          format: gguf
+                          family: llama
+                      - name: qwen2.5:latest
+                        size: 4680000000
+                        modified_at: 2024-01-14T15:45:00Z
+                        details:
+                          format: gguf
+                          family: qwen
+                    current_model: llama3.1:8b
+                    embedding_model: nomic-embed-text
+        '200':
+          description: Error fetching models
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  error:
+                    type: string
+                    example: Failed to fetch models: Connection refused
+                  available_models:
+                    type: array
+                    items: {}
+                    example: []
+                  current_model:
+                    type: string
+                    example: llama3.1:8b
+                  embedding_model:
+                    type: string
+                    example: nomic-embed-text
+
+  /models/change:
+    post:
+      tags:
+        - Models
+      summary: Change generation model
+      description: Change the current text generation model
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ModelChangeRequest'
+            examples:
+              change_model:
+                summary: Change to different model
+                value:
+                  model: qwen2.5:latest
+      responses:
+        '200':
+          description: Model changed successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  message:
+                    type: string
+                    example: Model changed to qwen2.5:latest
+                  current_model:
+                    type: string
+                    example: qwen2.5:latest
+                  success:
+                    type: boolean
+                    example: true
+        '400':
+          description: Model not found
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+              examples:
+                model_not_found:
+                  summary: Model not found
+                  value:
+                    detail: Model 'invalid-model' not found. Available models: ['llama3.1:8b', 'qwen2.5:latest']
+        '500':
+          description: Failed to change model
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api-docs:
+    get:
+      tags:
+        - System
+      summary: API documentation
+      description: Protected API documentation (requires authentication)
+      parameters:
+        - name: token
+          in: query
+          required: false
+          schema:
+            type: string
+          description: JWT token for authentication
+      responses:
+        '200':
+          description: Swagger UI documentation
+          content:
+            text/html:
+              schema:
+                type: string
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+  /openapi.json:
+    get:
+      tags:
+        - System
+      summary: OpenAPI schema
+      description: Protected OpenAPI JSON schema (requires authentication)
+      parameters:
+        - name: token
+          in: query
+          required: false
+          schema:
+            type: string
+          description: JWT token for authentication
+      responses:
+        '200':
+          description: OpenAPI JSON schema
+          content:
+            application/json:
+              schema:
+                type: object
+        '401':
+          $ref: '#/components/responses/UnauthorizedError'
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /auth/login
+
+  schemas:
+    User:
+      type: object
+      properties:
+        username:
+          type: string
+          example: admin
+        email:
+          type: string
+          format: email
+          example: admin@example.com
+        full_name:
+          type: string
+          example: Administrator
+        is_active:
+          type: boolean
+          example: true
+        role:
+          type: string
+          enum: [admin, user]
+          example: admin
+      required:
+        - username
+
+    UserCreate:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 50
+          example: newuser
+        password:
+          type: string
+          minLength: 6
+          example: password123
+        email:
+          type: string
+          format: email
+          example: newuser@example.com
+        full_name:
+          type: string
+          example: New User
+        role:
+          type: string
+          enum: [admin, user]
+          default: user
+          example: user
+      required:
+        - username
+        - password
+
+    UserLogin:
+      type: object
+      properties:
+        username:
+          type: string
+          example: admin
+        password:
+          type: string
+          example: admin123
+      required:
+        - username
+        - password
+
+    Token:
+      type: object
+      properties:
+        access_token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        token_type:
+          type: string
+          enum: [bearer]
+          example: bearer
+      required:
+        - access_token
+        - token_type
+
+    AskRequest:
+      type: object
+      properties:
+        query:
+          type: string
+          minLength: 1
+          maxLength: 1000
+          description: User question
+          example: What is the main topic of the documents?
+        top_k:
+          type: integer
+          minimum: 1
+          maximum: 20
+          default: 6
+          description: Number of chunks to retrieve
+          example: 5
+      required:
+        - query
+
+    AskResponse:
+      type: object
+      properties:
+        answer:
+          type: string
+          description: Generated answer
+          example: Based on the documents, the main topic is machine learning and artificial intelligence...
+        sources:
+          type: array
+          items:
+            type: object
+            properties:
+              doc_path:
+                type: string
+                example: docs/technical_guide.pdf
+              preview:
+                type: string
+                maxLength: 120
+                example: This document covers the fundamental concepts of machine learning...
+            required:
+              - doc_path
+              - preview
+          description: Source documents used for the answer
+      required:
+        - answer
+        - sources
+
+    UpsertRequest:
+      type: object
+      properties:
+        path:
+          type: string
+          description: Folder to index (default: DOCS_DIR)
+          example: docs
+        clear:
+          type: boolean
+          default: false
+          description: Clear all indexed data (dangerous)
+          example: false
+      additionalProperties: false
+
+    ModelChangeRequest:
+      type: object
+      properties:
+        model:
+          type: string
+          description: Model name to switch to
+          example: qwen2.5:latest
+      required:
+        - model
+
+    Model:
+      type: object
+      properties:
+        name:
+          type: string
+          example: llama3.1:8b
+        size:
+          type: integer
+          format: int64
+          example: 4838375424
+        modified_at:
+          type: string
+          format: date-time
+          example: 2024-01-15T10:30:00Z
+        details:
+          type: object
+          properties:
+            format:
+              type: string
+              example: gguf
+            family:
+              type: string
+              example: llama
+          additionalProperties: true
+      required:
+        - name
+
+    Error:
+      type: object
+      properties:
+        detail:
+          type: string
+          description: Error message
+          example: An error occurred
+      required:
+        - detail
+
+  responses:
+    UnauthorizedError:
+      description: Authentication required
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            no_token:
+              summary: No token provided
+              value:
+                detail: Not authenticated
+            invalid_token:
+              summary: Invalid token
+              value:
+                detail: Could not validate credentials
+            revoked_token:
+              summary: Token revoked
+              value:
+                detail: Token has been revoked
+
+    ForbiddenError:
+      description: Insufficient permissions
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/Error'
+          examples:
+            not_admin:
+              summary: Not admin user
+              value:
+                detail: Not enough permissions

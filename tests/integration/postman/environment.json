@@ -1,0 +1,939 @@
+{
+  "id": "mini-rag-local-env",
+  "name": "Mini RAG Local Environment",
+  "values": [
+    {
+      "key": "baseUrl",
+      "value": "http://localhost:8000",
+      "description": "Base URL for local development server",
+      "enabled": true
+    },
+    {
+      "key": "token",
+      "value": "",
+      "description": "JWT token for authentication (auto-populated after login)",
+      "enabled": true
+    },
+    {
+      "key": "userId",
+      "value": "admin",
+      "description": "Default user ID for testing",
+      "enabled": true
+    },
+    {
+      "key": "password",
+      "value": "admin123",
+      "description": "Default password for testing",
+      "enabled": true
+    },
+    {
+      "key": "testUsername",
+      "value": "testuser",
+      "description": "Test username for user registration",
+      "enabled": true
+    },
+    {
+      "key": "testPassword",
+      "value": "testpass123",
+      "description": "Test password for user registration",
+      "enabled": true
+    },
+    {
+      "key": "testEmail",
+      "value": "test@example.com",
+      "description": "Test email for user registration",
+      "enabled": true
+    },
+    {
+      "key": "testFullName",
+      "value": "Test User",
+      "description": "Test full name for user registration",
+      "enabled": true
+    },
+    {
+      "key": "sampleQuery",
+      "value": "What is the main topic of the documents?",
+      "description": "Sample question for testing ask endpoint",
+      "enabled": true
+    },
+    {
+      "key": "sampleTopK",
+      "value": "5",
+      "description": "Sample top_k value for testing ask endpoint",
+      "enabled": true
+    },
+    {
+      "key": "sampleModel",
+      "value": "qwen2.5:latest",
+      "description": "Sample model name for testing model change",
+      "enabled": true
+    },
+    {
+      "key": "docsPath",
+      "value": "docs",
+      "description": "Default path for document indexing",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250906_163858.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250906_163858.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250906_163858.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250906_163858.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250906_164437.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250906_164437.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250906_164437.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250906_164437.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250906_164926.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250906_164926.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250906_164926.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250906_164926.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250906_165424.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250906_165424.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250906_165424.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250906_165424.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250906_165625.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250906_165625.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250906_165625.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250906_165625.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_003733.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_003733.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_003733.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_003733.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_004627.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_004627.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_004627.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_004627.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_004716.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_004716.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_004716.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_004716.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_005332.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_005332.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_005332.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_005332.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_005620.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_005620.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_005620.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_005620.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_005739.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_005739.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_005739.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_005739.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_010045.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_010045.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_010045.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_010045.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_010600.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_010600.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_010600.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_010600.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_010831.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_010831.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_010831.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_010831.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_080850.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_080850.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_080850.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_080850.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_082728.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_082728.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_082728.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_082728.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_083317.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_083317.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_083317.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_083317.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_084941.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_084941.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_084941.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_084941.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_085148.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_085148.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_085148.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_085148.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_085213.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_085213.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_085213.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_085213.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_085428.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_085428.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_085428.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_085428.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_085817.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_085817.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_085817.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_085817.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_090207.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_090207.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_090207.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_090207.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_091011.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_091011.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_091011.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_091011.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_091051.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_091051.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_091051.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_091051.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_091213.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_091213.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_091213.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_091213.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_091703.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_091703.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_091703.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_091703.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_115906.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_115906.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_115906.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_115906.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_120151.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_120151.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_120151.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_120151.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_121117.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_121117.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_121117.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_121117.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_130618.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_130618.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_130618.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_130618.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_135155.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_135155.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_135155.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_135155.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_135704.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_135704.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_135704.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_135704.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_161550.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_161550.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_161550.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_161550.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_175738.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_175738.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_175738.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_175738.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_205350.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_205350.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_205350.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_205350.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_205423.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_205423.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_205423.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_205423.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_212159.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_212159.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_212159.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_212159.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250915_212231.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250915_212231.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250915_212231.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250915_212231.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250916_080132.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250916_080132.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250916_080132.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250916_080132.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250916_080154.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250916_080154.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250916_080154.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250916_080154.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250917_212315.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250917_212315.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250917_212315.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250917_212315.xyz",
+      "enabled": true
+    },
+    {
+      "key": "test_md_file",
+      "value": "test-reports/test_document_20250919_063428.md",
+      "enabled": true
+    },
+    {
+      "key": "test_txt_file",
+      "value": "test-reports/test_text_20250919_063428.txt",
+      "enabled": true
+    },
+    {
+      "key": "test_json_file",
+      "value": "test-reports/test_data_20250919_063428.json",
+      "enabled": true
+    },
+    {
+      "key": "test_unsupported_file",
+      "value": "test-reports/test_unsupported_20250919_063428.xyz",
+      "enabled": true
+    }
+  ],
+  "_postman_variable_scope": "environment"
+}

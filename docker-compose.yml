@@ -1,0 +1,72 @@
+services:
+  # Vector Database
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: mini-rag-qdrant
+    ports:
+      - "6333:6333"
+      - "6334:6334"
+    volumes:
+      - qdrant_storage:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__HTTP_PORT=6333
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # RAG Application
+  rag-app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mini-rag-app
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./docs:/app/docs
+      - ./templates:/app/templates
+    environment:
+      - OLLAMA_URL=http://host.docker.internal:11434
+      - QDRANT_URL=http://qdrant:6333
+      - QDRANT_COLLECTION=rag_chunks
+      - GEN_MODEL=llama3.1:8b
+      - EMB_MODEL=nomic-embed-text
+      - CHUNK_SIZE=800
+      - CHUNK_OVERLAP=120
+      - TOP_K=6
+      - SECRET_KEY=your-secret-key-change-in-production
+      - ACCESS_TOKEN_EXPIRE_MINUTES=30
+    depends_on:
+      - qdrant
+    networks:
+      - rag-network
+    restart: unless-stopped
+
+  # Nginx for Web UI (Optional - for production)
+  nginx:
+    image: nginx:alpine
+    container_name: mini-rag-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+      - ./templates:/usr/share/nginx/html:ro
+    depends_on:
+      - rag-app
+    networks:
+      - rag-network
+    restart: unless-stopped
+    profiles:
+      - production
+
+volumes:
+  qdrant_storage:
+    driver: local
+
+networks:
+  rag-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16 
